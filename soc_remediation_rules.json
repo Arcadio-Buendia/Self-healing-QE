@@ -1,0 +1,322 @@
+{
+  "questions": {
+    "is_recoverable": {
+      "type": "noul",
+      "instructions": "Can this pw.x failure be addressed by one of the supported numerical actions? Consult state.problem_catalog and this input history. Memory failures are recoverable only when the current settings admit one of the bounded memory reductions; do not assume every crash is SCF failure.",
+      "criteria": {
+        "true": "A supported numerical action has satisfied preconditions and has not already failed.",
+        "false": "Input, geometry, pseudopotential, restart, storage, library or MPI problem; unexplained crash; or no applicable numerical remedy remains."
+      }
+    },
+    "strategy": {
+      "type": "choice",
+      "instructions": "Use state.problem_catalog for diagnosis and source context. Select only a strategy listed here and in the executable actions. Check current_input and previous_remediation_history; never choose a no-op or repeat a failed edit. Do not change the physical model or accuracy targets. When a catalog entry requires manual review and no supported numerical remedy applies, select abort.",
+      "criteria": {
+        "switch_diagonalization_cg": "Persistent late-step c_bands or cdiaghg/rdiaghg failure with sensible geometry and pseudopotentials, or Davidson memory pressure. Try cg once if not already selected; it is slower. Early eigenvector warnings alone do not justify a change.",
+        "reduce_mixing_beta": "Estimated SCF accuracy is oscillating or plateaus due to charge sloshing in the spinor density.",
+        "switch_mixing_mode_local_tf": "Charge sloshing in an inhomogeneous system; require evidence QE >= 7.3 before choosing local-TF. With unknown/older version use reduce_mixing_beta or manual upgrade instead.",
+        "increase_maxstep": "SCF error is decreasing monotonically but ran out of iterations before reaching conv_thr.",
+        "abort": "Manual-review problem, unknown cause, missing action preconditions, unchanged parameter, or exhausted supported remedies. Do not retry the same ineffective edit.",
+        "increase_mixing_history": "Persistent SCF oscillations after gentler mixing; current mixing_ndim < 12 (absent means 8), with available RAM and no memory failure. Set history to 12 once.",
+        "reduce_mixing_history_memory": "Memory allocation failure associated with density mixing and mixing_ndim > 4 (absent means 8). Set to 4 once; do not increase history during memory failures.",
+        "reduce_davidson_workspace": "Davidson workspace memory pressure with diago_david_ndim explicitly greater than 2. Set to 2 once; not useful when already 2 or when diagonalization is cg."
+      }
+    }
+  },
+  "preflight_questions": {
+    "needs_remediation": {
+      "type": "noul",
+      "instructions": "Review this input and its own history. Suggest changes only when evidence supports them; do not assume a universal convergence threshold, smearing width, or mixing mode.",
+      "criteria": {
+        "true": "This input has a documented convergence problem in its own prior history and an available numerical remedy.",
+        "false": "No input-specific evidence supports a proactive change."
+      }
+    },
+    "strategy": {
+      "type": "choice",
+      "instructions": "Use state.problem_catalog, current input and its own history. Apply only supported actions whose preconditions are satisfied; otherwise select none. No universal best settings are assumed.",
+      "criteria": {
+        "reduce_mixing_beta": "Prior history supports gentler density mixing; halve the current value within the action bounds.",
+        "switch_mixing_mode_local_tf": "Charge sloshing in an inhomogeneous system; require evidence QE >= 7.3 before choosing local-TF. With unknown/older version use reduce_mixing_beta or manual upgrade instead.",
+        "increase_maxstep": "Prior history shows decreasing residual stopped at electron_maxstep; add 100 iterations only if more steps are justified.",
+        "none": "All parameters look optimal based on prior history; no further proactive edits needed."
+      }
+    }
+  },
+  "actions": {
+    "switch_diagonalization_cg": {
+      "namelist": "ELECTRONS",
+      "param": "diagonalization",
+      "type": "string",
+      "value": "'cg'"
+    },
+    "reduce_mixing_beta": {
+      "namelist": "ELECTRONS",
+      "param": "mixing_beta",
+      "type": "float_multiply",
+      "factor": 0.5,
+      "min_val": 0.05,
+      "default": 0.3
+    },
+    "switch_mixing_mode_local_tf": {
+      "namelist": "ELECTRONS",
+      "param": "mixing_mode",
+      "type": "string",
+      "value": "'local-TF'"
+    },
+    "increase_maxstep": {
+      "namelist": "ELECTRONS",
+      "param": "electron_maxstep",
+      "type": "int_add",
+      "value": 100,
+      "default": 200
+    },
+    "increase_mixing_history": {
+      "namelist": "ELECTRONS",
+      "param": "mixing_ndim",
+      "type": "string",
+      "value": "12"
+    },
+    "reduce_mixing_history_memory": {
+      "namelist": "ELECTRONS",
+      "param": "mixing_ndim",
+      "type": "string",
+      "value": "4"
+    },
+    "reduce_davidson_workspace": {
+      "namelist": "ELECTRONS",
+      "param": "diago_david_ndim",
+      "type": "string",
+      "value": "2"
+    }
+  },
+  "research": {
+    "reviewed_on": "2026-10-30",
+    "sources": {
+      "qe_troubleshooting": "https://www.quantum-espresso.org/Doc/pw_user_guide/node21.html",
+      "qe_input": "https://www.quantum-espresso.org/Doc/INPUT_PW.html",
+      "forum_davidson": "https://lists.quantum-espresso.org/pipermail/users/2017-January/037231.html",
+      "forum_local_tf": "https://lists.quantum-espresso.org/pipermail/users/2024-July/051717.html",
+      "forum_soc": "https://lists.quantum-espresso.org/pipermail/users/2015-November/033942.html",
+      "forum_soc_mixed": "https://lists.quantum-espresso.org/pipermail/users/2026-March/052928.html",
+      "forum_nscf": "https://lists.quantum-espresso.org/pipermail/developers/2019-June/002078.html"
+    },
+    "scope": "pw.x electronic convergence and related diagnostics; forum advice is conditional and version dependent. Numeric remedy values are bounded workflow choices, not universal convergence guarantees."
+  },
+  "problem_catalog": [
+    {
+      "id": "mixing_history",
+      "signals": [
+        "persistent SCF oscillations"
+      ],
+      "solution": "Try mixing_ndim=12 with spare memory; avoid repeatedly undoing a memory reduction.",
+      "automatic_strategies": [
+        "increase_mixing_history"
+      ],
+      "manual_review_required": false,
+      "source_ids": [
+        "qe_input",
+        "qe_troubleshooting"
+      ]
+    },
+    {
+      "id": "mixing_memory",
+      "signals": [
+        "allocation failure",
+        "out of memory"
+      ],
+      "solution": "Reduce mixing_ndim to 4 only if larger; scheduler-killed jobs may need more allocated RAM.",
+      "automatic_strategies": [
+        "reduce_mixing_history_memory"
+      ],
+      "manual_review_required": false,
+      "source_ids": [
+        "qe_input"
+      ]
+    },
+    {
+      "id": "davidson_memory",
+      "signals": [
+        "Davidson workspace allocation failure"
+      ],
+      "solution": "Reduce explicit diago_david_ndim > 2 to 2; consider cg.",
+      "automatic_strategies": [
+        "reduce_davidson_workspace",
+        "switch_diagonalization_cg"
+      ],
+      "manual_review_required": false,
+      "source_ids": [
+        "forum_davidson",
+        "qe_input"
+      ]
+    },
+    {
+      "id": "subspace_diagonalization",
+      "signals": [
+        "cdiaghg",
+        "rdiaghg",
+        "S matrix not positive definite"
+      ],
+      "solution": "Check structure and pseudopotentials; cg is conditional, never a cure for overlapping atoms.",
+      "automatic_strategies": [
+        "switch_diagonalization_cg"
+      ],
+      "manual_review_required": false,
+      "source_ids": [
+        "qe_troubleshooting"
+      ]
+    },
+    {
+      "id": "old_local_tf",
+      "signals": [
+        "local-TF on QE <= 7.2",
+        "hang during mixing"
+      ],
+      "solution": "Upgrade to QE >= 7.3; unknown version is insufficient evidence to enable local-TF.",
+      "automatic_strategies": [],
+      "manual_review_required": true,
+      "source_ids": [
+        "forum_local_tf"
+      ]
+    },
+    {
+      "id": "eigenvector_warning",
+      "signals": [
+        "c_bands: eigenvalues not converged"
+      ],
+      "solution": "Early warnings alone need no remedy; investigate persistent final-step warnings.",
+      "automatic_strategies": [],
+      "manual_review_required": true,
+      "source_ids": [
+        "qe_troubleshooting"
+      ]
+    },
+    {
+      "id": "negative_density",
+      "signals": [
+        "negative rho",
+        "negative or imaginary charge"
+      ],
+      "solution": "Check magnitude; significant USPP density artifacts can require ecutrho convergence tests.",
+      "automatic_strategies": [],
+      "manual_review_required": true,
+      "source_ids": [
+        "qe_troubleshooting"
+      ]
+    },
+    {
+      "id": "scratch_io",
+      "signals": [
+        "davcio"
+      ],
+      "solution": "Check outdir permissions, quota, capacity, restart integrity and concurrent prefix collisions.",
+      "automatic_strategies": [],
+      "manual_review_required": true,
+      "source_ids": [
+        "qe_troubleshooting"
+      ]
+    },
+    {
+      "id": "fermi_bracketing",
+      "signals": [
+        "cannot bracket Ef"
+      ],
+      "solution": "Check electron count, bands and broadening; consider Gaussian/cold smearing after reviewing occupations.",
+      "automatic_strategies": [],
+      "manual_review_required": true,
+      "source_ids": [
+        "qe_troubleshooting"
+      ]
+    },
+    {
+      "id": "metallic_occupations",
+      "signals": [
+        "system is metallic, specify occupations",
+        "charge is wrong: smearing is needed"
+      ],
+      "solution": "Review occupation treatment and empty bands; validate smearing against the intended system.",
+      "automatic_strategies": [],
+      "manual_review_required": true,
+      "source_ids": [
+        "qe_troubleshooting"
+      ]
+    },
+    {
+      "id": "restart_data",
+      "signals": [
+        "cannot recover",
+        "error reading recover file"
+      ],
+      "solution": "Check restart compatibility; preserve data before planning a fresh start.",
+      "automatic_strategies": [],
+      "manual_review_required": true,
+      "source_ids": [
+        "qe_troubleshooting"
+      ]
+    },
+    {
+      "id": "functional_mismatch",
+      "signals": [
+        "inconsistent DFT"
+      ],
+      "solution": "Check pseudopotential functional consistency; do not force an XC override automatically.",
+      "automatic_strategies": [],
+      "manual_review_required": true,
+      "source_ids": [
+        "qe_troubleshooting"
+      ]
+    },
+    {
+      "id": "soc_pseudopotentials",
+      "signals": [
+        "FR-PP please use lspinorb=.true.",
+        "US j-average not yet implemented"
+      ],
+      "solution": "Match relativistic pseudopotentials to the intended SOC calculation; do not toggle the physical model automatically.",
+      "automatic_strategies": [],
+      "manual_review_required": true,
+      "source_ids": [
+        "forum_soc",
+        "forum_soc_mixed"
+      ]
+    },
+    {
+      "id": "relaxation_accuracy",
+      "signals": [
+        "BFGS failure near convergence"
+      ],
+      "solution": "Check force/energy consistency and electronic tolerance; relaxing conv_thr can worsen ionic convergence.",
+      "automatic_strategies": [],
+      "manual_review_required": true,
+      "source_ids": [
+        "forum_local_tf"
+      ]
+    },
+    {
+      "id": "nscf_davidson_legacy",
+      "signals": [
+        "older QE NSCF diagonalization failure"
+      ],
+      "solution": "A historical developer report found diago_david_ndim=2 helpful; verify version and cause before applying.",
+      "automatic_strategies": [],
+      "manual_review_required": true,
+      "source_ids": [
+        "forum_nscf"
+      ]
+    },
+    {
+      "id": "runtime_environment",
+      "signals": [
+        "MPI error",
+        "segmentation fault",
+        "cannot open shared object file"
+      ],
+      "solution": "Inspect runtime diagnostics, dependencies and resource allocation before changing SCF parameters.",
+      "automatic_strategies": [],
+      "manual_review_required": true,
+      "source_ids": [
+        "qe_troubleshooting"
+      ]
+    }
+  ]
+}

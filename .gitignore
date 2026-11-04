@@ -1,0 +1,25 @@
+original_files/
+.env
+*.log
+*.out
+*.pid
+*.tmp
+snippet_*.err
+.self_healing_dft.lock/
+*.save/
+__pycache__/
+
+# Local credentials and calculation data
+.env.*
+!.env.example
+*.in
+*.upf
+*.UPF
+*.hdf5
+*.h5
+.venv/
+venv/
+scratch/
+*.local.json
+soc_typesafe_history.json
+soc_dft_help.md
